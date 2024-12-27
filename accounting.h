@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <unordered_set>
 #include <vector>
 
 typedef float real_t;
@@ -23,6 +24,8 @@ class UniqueObject {
   uuid_t id_;
 };
 
+class Account;
+
 class ObjectsStore {
  public:
   static ObjectsStore* GetObjectsStoreInstance() {
@@ -34,17 +37,21 @@ class ObjectsStore {
 
   template <typename T>
   T* Get(uuid_t id) {
-    if (objects_.find(id) != objects_.end()) {
+    if (objects_.find(id) == objects_.end()) {
       return nullptr;
     }
     return static_cast<T*>(objects_.find(id)->second);
   }
 
   void Add(uuid_t id, UniqueObject*);
+  void AddMetaAccount(account_id_t id);
+
+  std::unordered_set<account_id_t> GetMetaAccounts();
 
  private:
   static ObjectsStore* instance_;
   std::unordered_map<uuid_t, UniqueObject*> objects_;
+  std::unordered_set<account_id_t> meta_accounts_;
 };
 
 // A proof can be receipt, invoice, contract etc.
@@ -55,10 +62,19 @@ class Proof : public UniqueObject {
 
 class JournalEntry : public UniqueObject {
  private:
-  JournalEntry();
+  JournalEntry(std::vector<proof_id_t> proofs,
+               std::vector<std::pair<account_id_t, real_t>> debits,
+               std::vector<std::pair<account_id_t, real_t>> credits)
+      : proofs_(proofs), debits_(debits), credits_(credits) {}
 
  public:
-  JournalEntry* CreateJournalEntry();
+  static JournalEntry* CreateJournalEntry(std::vector<proof_id_t> proofs,
+                                          account_id_t debit_account,
+                                          real_t debit_amount,
+                                          account_id_t credit_account,
+                                          real_t credit_amount);
+
+  void Accounts();
 
  private:
   std::vector<proof_id_t> proofs_;
@@ -71,12 +87,12 @@ class Account : public UniqueObject {
   Account(std::string name) : name_(name) {}
 
  public:
-  Account* CreateAccount(std::string name);
-
   void Credit(real_t amount);
   void Debit(real_t amount);
-  void Credit(account_id_t account, real_t amount);
-  void Debit(account_id_t account, real_t amount);
+  bool Credit(account_id_t account, real_t amount);
+  bool Debit(account_id_t account, real_t amount);
+
+  real_t Balance() const;
 
  private:
   // Returns:
@@ -93,25 +109,21 @@ class Account : public UniqueObject {
 
 class Asset : public Account {
  public:
-  Asset() : Account("Asset") {}
+  Asset();
 };
-
 class Liabilities : public Account {
  public:
-  Liabilities() : Account("Liabilities") {}
+  Liabilities();
 };
-
 class Revenue : public Account {
  public:
-  Revenue() : Account("Expense") {}
+  Revenue();
 };
-
 class Expense : public Account {
  public:
-  Expense() : Account("Expense") {}
+  Expense();
 };
-
 class Equity : public Account {
  public:
-  Equity() : Account("Equity") {}
+  Equity();
 };
